@@ -194,13 +194,14 @@ Alias: `-e`. Use this flag to show full diffs and errors instead of a patch.
 
 ### `--filter=<file>`
 
-Path to a module exporting a filtering function. This asynchronous function receives a list of test paths which can be manipulated to exclude tests from running by returning an object with shape `{ filtered: Array<{ test: string }> }`. Especially useful when used in conjunction with a testing infrastructure to filter known broken tests, e.g.
+Path to a module exporting a filtering function. This asynchronous function receives a list of test paths which can be manipulated to exclude tests from running and must return an object with shape `{ filtered: Array<string> }` containing the tests that should be run by Jest. Especially useful when used in conjunction with a testing infrastructure to filter known broken tests.
 
 ```js title="my-filter.js"
+// This filter when applied will only run tests ending in .spec.js (not the best way to do it, but it's just an example):
+const filteringFunction = testPath => testPath.endsWith('.spec.js');
+
 module.exports = testPaths => {
-  const allowedPaths = testPaths
-    .filter(filteringFunction)
-    .map(test => ({test})); // [{ test: "path1.spec.js" }, { test: "path2.spec.js" }, etc]
+  const allowedPaths = testPaths.filter(filteringFunction); // ["path1.spec.js", "path2.spec.js", etc]
 
   return {
     filtered: allowedPaths,
@@ -287,6 +288,10 @@ Activates notifications for test results. Good for when you don't want your cons
 ### `--onlyChanged`
 
 Alias: `-o`. Attempts to identify which tests to run based on which files have changed in the current repository. Only works if you're running tests in a git/hg repository at the moment and requires a static dependency graph (ie. no dynamic requires).
+
+### `--onlyFailures`
+
+Alias: `-f`. Run tests that failed in the previous execution.
 
 ### `--openHandlesTimeout=<milliseconds>`
 
@@ -402,6 +407,8 @@ jest --seed=1324
 
 If this option is not specified Jest will randomly generate the value. You can use the [`--showSeed`](#--showseed) flag to print the seed in the test report summary.
 
+Jest uses the seed internally for shuffling the order in which test suites are run. If the [`--randomize`](#--randomize) option is used, the seed is also used for shuffling the order of tests within each `describe` block. When dealing with flaky tests, rerunning with the same seed might help reproduce the failure.
+
 :::
 
 ### `--selectProjects <project1> ... <projectN>`
@@ -516,6 +523,14 @@ Display individual test results with the test suite hierarchy.
 ### `--version`
 
 Alias: `-v`. Print the version and exit.
+
+### `--waitNextEventLoopTurnForUnhandledRejectionEvents`
+
+Gives one event loop turn to handle `rejectionHandled`, `uncaughtException` or `unhandledRejection`.
+
+Without this flag Jest may report false-positive errors (e.g. actually handled rejection reported) or not report actually unhandled rejection (or report it for different test case).
+
+This option may add a noticeable overhead for fast test suites.
 
 ### `--watch`
 

@@ -28,7 +28,7 @@ LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-/* eslint-disable sort-keys, local/prefer-spread-eventually, local/prefer-rest-params-eventually */
+/* eslint-disable sort-keys */
 
 import type {Global} from '@jest/types';
 import type {Jasmine, SpecDefinitionsFn} from '../types';
@@ -60,15 +60,13 @@ export const create = function (createOptions: Record<string, any>): Jasmine {
     enumerable: true,
     get() {
       return (
-        // eslint-disable-next-line no-restricted-globals
-        (global as Global.Global)[testTimeoutSymbol] ||
+        (globalThis as Global.Global)[testTimeoutSymbol] ||
         createOptions.testTimeout ||
         5000
       );
     },
     set(value) {
-      // eslint-disable-next-line no-restricted-globals
-      (global as Global.Global)[testTimeoutSymbol] = value;
+      (globalThis as Global.Global)[testTimeoutSymbol] = value;
     },
   });
 
@@ -119,7 +117,7 @@ export const _interface = function (jasmine: Jasmine, env: any) {
 
     beforeEach() {
       if (typeof arguments[0] !== 'function') {
-        throw new Error(
+        throw new TypeError(
           'Invalid first argument. It must be a callback function.',
         );
       }
@@ -128,7 +126,7 @@ export const _interface = function (jasmine: Jasmine, env: any) {
 
     afterEach() {
       if (typeof arguments[0] !== 'function') {
-        throw new Error(
+        throw new TypeError(
           'Invalid first argument. It must be a callback function.',
         );
       }
@@ -137,7 +135,7 @@ export const _interface = function (jasmine: Jasmine, env: any) {
 
     beforeAll() {
       if (typeof arguments[0] !== 'function') {
-        throw new Error(
+        throw new TypeError(
           'Invalid first argument. It must be a callback function.',
         );
       }
@@ -146,7 +144,7 @@ export const _interface = function (jasmine: Jasmine, env: any) {
 
     afterAll() {
       if (typeof arguments[0] !== 'function') {
-        throw new Error(
+        throw new TypeError(
           'Invalid first argument. It must be a callback function.',
         );
       }

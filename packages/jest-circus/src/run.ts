@@ -15,7 +15,7 @@ import shuffleArray, {
   rngBuilder,
 } from './shuffleArray';
 import {dispatch, getState} from './state';
-import {RETRY_TIMES} from './types';
+import {RETRY_IMMEDIATELY, RETRY_TIMES, WAIT_BEFORE_RETRY} from './types';
 import {
   callAsyncCircusFn,
   getAllHooksForDescribe,
@@ -24,8 +24,13 @@ import {
   makeRunResult,
 } from './utils';
 
+// Global values can be overwritten by mocks or tests. We'll capture
+// the original values in the variables before we require any files.
+const {setTimeout} = globalThis;
+
 type ConcurrentTestEntry = Omit<Circus.TestEntry, 'fn'> & {
   fn: Circus.ConcurrentTestFn;
+  done: Promise<void>;
 };
 
 const run = async (): Promise<Circus.RunResult> => {
@@ -59,19 +64,67 @@ const _runTestsForDescribeBlock = async (
   if (isRootBlock) {
     const concurrentTests = collectConcurrentTests(describeBlock);
     if (concurrentTests.length > 0) {
-      startTestsConcurrently(concurrentTests);
+      startTestsConcurrently(concurrentTests, isSkipped);
     }
   }
 
   // Tests that fail and are retried we run after other tests
   const retryTimes =
-    // eslint-disable-next-line no-restricted-globals
-    parseInt((global as Global.Global)[RETRY_TIMES] as string, 10) || 0;
-  const deferredRetryTests = [];
+    Number.parseInt((globalThis as Global.Global)[RETRY_TIMES] as string, 10) ||
+    0;
+
+  const waitBeforeRetry =
+    Number.parseInt(
+      (globalThis as Global.Global)[WAIT_BEFORE_RETRY] as string,
+      10,
+    ) || 0;
+
+  const retryImmediately: boolean =
+    ((globalThis as Global.Global)[RETRY_IMMEDIATELY] as any) || false;
+
+  const deferredRetryTests: Array<Circus.TestEntry> = [];
 
   if (rng) {
     describeBlock.children = shuffleArray(describeBlock.children, rng);
   }
+
+  const rerunTest = async (test: Circus.TestEntry) => {
+    let numRetriesAvailable = retryTimes;
+
+    while (numRetriesAvailable > 0 && test.errors.length > 0) {
+      // Clear errors so retries occur
+      await dispatch({name: 'test_retry', test});
+
+      if (waitBeforeRetry > 0) {
+        await new Promise(resolve => setTimeout(resolve, waitBeforeRetry));
+      }
+
+      await _runTest(test, isSkipped);
+      numRetriesAvailable--;
+    }
+  };
+
+  const handleRetry = async (
+    test: Circus.TestEntry,
+    hasErrorsBeforeTestRun: boolean,
+    hasRetryTimes: boolean,
+  ) => {
+    // no retry if the test passed or had errors before the test ran
+    if (test.errors.length === 0 || hasErrorsBeforeTestRun || !hasRetryTimes) {
+      return;
+    }
+
+    if (!retryImmediately) {
+      deferredRetryTests.push(test);
+      return;
+    }
+
+    // If immediate retry is set, we retry the test immediately after the first run
+    await rerunTest(test);
+  };
+
+  const concurrentTests = [];
+
   for (const child of describeBlock.children) {
     switch (child.type) {
       case 'describeBlock': {
@@ -80,31 +133,28 @@ const _runTestsForDescribeBlock = async (
       }
       case 'test': {
         const hasErrorsBeforeTestRun = child.errors.length > 0;
-        await _runTest(child, isSkipped);
-
-        if (
-          hasErrorsBeforeTestRun === false &&
-          retryTimes > 0 &&
-          child.errors.length > 0
-        ) {
-          deferredRetryTests.push(child);
+        const hasRetryTimes = retryTimes > 0;
+        if (child.concurrent) {
+          concurrentTests.push(
+            (child as ConcurrentTestEntry).done.then(() =>
+              handleRetry(child, hasErrorsBeforeTestRun, hasRetryTimes),
+            ),
+          );
+        } else {
+          await _runTest(child, isSkipped);
+          await handleRetry(child, hasErrorsBeforeTestRun, hasRetryTimes);
         }
         break;
       }
     }
   }
 
+  // wait for concurrent tests to finish
+  await Promise.all(concurrentTests);
+
   // Re-run failed tests n-times if configured
   for (const test of deferredRetryTests) {
-    let numRetriesAvailable = retryTimes;
-
-    while (numRetriesAvailable > 0 && test.errors.length > 0) {
-      // Clear errors so retries occur
-      await dispatch({name: 'test_retry', test});
-
-      await _runTest(test, isSkipped);
-      numRetriesAvailable--;
-    }
+    await rerunTest(test);
   }
 
   if (!isSkipped) {
@@ -122,23 +172,23 @@ function collectConcurrentTests(
   if (describeBlock.mode === 'skip') {
     return [];
   }
-  const {hasFocusedTests, testNamePattern} = getState();
   return describeBlock.children.flatMap(child => {
     switch (child.type) {
       case 'describeBlock':
         return collectConcurrentTests(child);
       case 'test':
-        const skip =
-          !child.concurrent ||
-          child.mode === 'skip' ||
-          (hasFocusedTests && child.mode !== 'only') ||
-          (testNamePattern && !testNamePattern.test(getTestID(child)));
-        return skip ? [] : [child as ConcurrentTestEntry];
+        if (child.concurrent) {
+          return [child as ConcurrentTestEntry];
+        }
+        return [];
     }
   });
 }
 
-function startTestsConcurrently(concurrentTests: Array<ConcurrentTestEntry>) {
+function startTestsConcurrently(
+  concurrentTests: Array<ConcurrentTestEntry>,
+  parentSkipped: boolean,
+) {
   const mutex = pLimit(getState().maxConcurrency);
   const testNameStorage = new AsyncLocalStorage<string>();
   jestExpect.setState({
@@ -146,16 +196,19 @@ function startTestsConcurrently(concurrentTests: Array<ConcurrentTestEntry>) {
   });
   for (const test of concurrentTests) {
     try {
-      const testFn = test.fn;
-      const promise = mutex(() => testNameStorage.run(getTestID(test), testFn));
+      const promise = mutex(() =>
+        testNameStorage.run(getTestID(test), () =>
+          _runTest(test, parentSkipped),
+        ),
+      );
       // Avoid triggering the uncaught promise rejection handler in case the
       // test fails before being awaited on.
       // eslint-disable-next-line @typescript-eslint/no-empty-function
       promise.catch(() => {});
-      test.fn = () => promise;
-    } catch (err) {
+      test.done = promise;
+    } catch (error) {
       test.fn = () => {
-        throw err;
+        throw error;
       };
     }
   }

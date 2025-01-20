@@ -48,11 +48,13 @@ jobs:
       - name: ts integration
         run: yarn test-ts --selectProjects ts-integration
       - name: type tests
-        run: yarn test-ts --selectProjects type-tests
+        run: yarn test-types --target 5.0,current
       - name: verify TypeScript@5.0 compatibility
         run: yarn verify-old-ts
       - name: run ESLint with type info
         run: yarn lint-ts-files
+      - name: Run tests depending on type information
+        run: yarn test-with-type-info
 
   typecheck:
     name: Typecheck Examples and Tests
@@ -202,11 +204,17 @@ jobs:
         id: cpu-cores
         uses: SimenB/github-actions-cpu-cores@v2
       - name: run tests with coverage
-        run: yarn jest-coverage --color --config jest.config.ci.mjs --max-workers ${{ steps.cpu-cores.outputs.count }} --shard=${{ matrix.shard }}
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_on: error
+          command: yarn jest-coverage --color --config jest.config.ci.mjs --max-workers ${{ steps.cpu-cores.outputs.count }} --shard=${{ matrix.shard }}
       - name: map coverage
         run: node ./scripts/mapCoverage.mjs
         if: always()
-      - uses: codecov/codecov-action@v3
+      - uses: codecov/codecov-action@v5
         if: always()
         with:
           directory: ./coverage
+          token: ${{ secrets.CODECOV_TOKEN }}

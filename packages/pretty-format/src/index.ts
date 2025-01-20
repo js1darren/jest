@@ -63,6 +63,7 @@ const getConstructorName = (val: new (...args: Array<any>) => unknown) =>
 /* global window */
 /** Is val is equal to global window object? Works even if it does not exist :) */
 const isWindow = (val: unknown) =>
+  // eslint-disable-next-line unicorn/prefer-global-this
   typeof window !== 'undefined' && val === window;
 
 const SYMBOL_REGEXP = /^Symbol\((.*)\)(.*)$/;
@@ -146,7 +147,7 @@ function printBasicValue(
   }
   if (typeOf === 'string') {
     if (escapeString) {
-      return `"${val.replace(/"|\\/g, '\\$&')}"`;
+      return `"${val.replaceAll(/"|\\/g, '\\$&')}"`;
     }
     return `"${val}"`;
   }
@@ -175,7 +176,7 @@ function printBasicValue(
     return printSymbol(val);
   }
   if (toStringed === '[object Date]') {
-    return isNaN(+val) ? 'Date { NaN }' : toISOString.call(val);
+    return Number.isNaN(+val) ? 'Date { NaN }' : toISOString.call(val);
   }
   if (toStringed === '[object Error]') {
     return printError(val);
@@ -183,7 +184,7 @@ function printBasicValue(
   if (toStringed === '[object RegExp]') {
     if (escapeRegex) {
       // https://github.com/benjamingr/RegExp.escape/blob/main/polyfill.js
-      return regExpToString.call(val).replace(/[\\^$*+?.()|[\]{}]/g, '\\$&');
+      return regExpToString.call(val).replaceAll(/[$()*+.?[\\\]^{|}]/g, '\\$&');
     }
     return regExpToString.call(val);
   }
@@ -210,7 +211,7 @@ function printComplexValue(
   if (refs.includes(val)) {
     return '[Circular]';
   }
-  refs = refs.slice();
+  refs = [...refs];
   refs.push(val);
 
   const hitMaxDepth = ++depth > config.maxDepth;
@@ -246,8 +247,8 @@ function printComplexValue(
           min
             ? ''
             : !config.printBasicPrototype && val.constructor.name === 'Array'
-            ? ''
-            : `${val.constructor.name} `
+              ? ''
+              : `${val.constructor.name} `
         }[${printListItems(val, config, indentation, depth, refs, printer)}]`;
   }
   if (toStringed === '[object Map]') {
@@ -284,8 +285,8 @@ function printComplexValue(
         min
           ? ''
           : !config.printBasicPrototype && getConstructorName(val) === 'Object'
-          ? ''
-          : `${getConstructorName(val)} `
+            ? ''
+            : `${getConstructorName(val)} `
       }{${printObjectProperties(
         val,
         config,
@@ -320,7 +321,7 @@ function printPlugin(
             const indentationNext = indentation + config.indent;
             return (
               indentationNext +
-              str.replace(NEWLINE_REGEXP, `\n${indentationNext}`)
+              str.replaceAll(NEWLINE_REGEXP, `\n${indentationNext}`)
             );
           },
           {
@@ -334,7 +335,7 @@ function printPlugin(
     throw new PrettyFormatPluginError(error.message, error.stack);
   }
   if (typeof printed !== 'string') {
-    throw new Error(
+    throw new TypeError(
       `pretty-format: Plugin must return type "string" but instead returned "${typeof printed}".`,
     );
   }
@@ -342,10 +343,10 @@ function printPlugin(
 }
 
 function findPlugin(plugins: Plugins, val: unknown) {
-  for (let p = 0; p < plugins.length; p++) {
+  for (const plugin of plugins) {
     try {
-      if (plugins[p].test(val)) {
-        return plugins[p];
+      if (plugin.test(val)) {
+        return plugin;
       }
     } catch (error: any) {
       throw new PrettyFormatPluginError(error.message, error.stack);
@@ -410,8 +411,8 @@ export const DEFAULT_OPTIONS = toOptionsSubtype({
   escapeString: true,
   highlight: false,
   indent: 2,
-  maxDepth: Infinity,
-  maxWidth: Infinity,
+  maxDepth: Number.POSITIVE_INFINITY,
+  maxWidth: Number.POSITIVE_INFINITY,
   min: false,
   plugins: [],
   printBasicPrototype: true,
@@ -438,7 +439,7 @@ function validateOptions(options: OptionsReceived) {
     }
 
     if (typeof options.theme !== 'object') {
-      throw new Error(
+      throw new TypeError(
         `pretty-format: Option "theme" must be of type "object" but instead received "${typeof options.theme}".`,
       );
     }
@@ -504,7 +505,7 @@ const getConfig = (options?: OptionsReceived): Config => ({
 });
 
 function createIndent(indent: number): string {
-  return new Array(indent + 1).join(' ');
+  return Array.from({length: indent + 1}).join(' ');
 }
 
 /**

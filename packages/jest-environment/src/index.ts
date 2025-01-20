@@ -153,17 +153,6 @@ export interface Jest {
    * Creates a mock function. Optionally takes a mock implementation.
    */
   fn: ModuleMocker['fn'];
-  // TODO remove `genMockFromModule()` in Jest 30
-  /**
-   * Given the name of a module, use the automatic mocking system to generate a
-   * mocked version of the module for you.
-   *
-   * This is useful when you want to create a manual mock that extends the
-   * automatic mock's behavior.
-   *
-   * @deprecated Use `jest.createMockFromModule()` instead
-   */
-  genMockFromModule<T = unknown>(moduleName: string): Mocked<T>;
   /**
    * When mocking time, `Date.now()` will also be mocked. If you for some reason
    * need access to the real current time, you can invoke this function.
@@ -237,6 +226,16 @@ export interface Jest {
    */
   now(): number;
   /**
+   * Registers a callback function that is invoked whenever a mock is generated for a module.
+   * This callback is passed the module name and the newly created mock object, and must return
+   * the (potentially modified) mock object.
+   *
+   * If multiple callbacks are registered, they will be called in the order they were added.
+   * Each callback receives the result of the previous callback as the `moduleMock` parameter,
+   * making it possible to apply sequential transformations.
+   */
+  onGenerateMock<T>(cb: (moduleName: string, moduleMock: T) => T): Jest;
+  /**
    * Replaces property on an object with another value.
    *
    * @remarks
@@ -298,12 +297,21 @@ export interface Jest {
    * the test to fail to the console, providing visibility on why a retry occurred.
    * retries is exhausted.
    *
+   * `waitBeforeRetry` is the number of milliseconds to wait before retrying
+   *
+   * `retryImmediately` is the flag to retry the failed test immediately after
+   *  failure
+   *
    * @remarks
    * Only available with `jest-circus` runner.
    */
   retryTimes(
     numRetries: number,
-    options?: {logErrorsBeforeRetry?: boolean},
+    options?: {
+      logErrorsBeforeRetry?: boolean;
+      retryImmediately?: boolean;
+      waitBeforeRetry?: number;
+    },
   ): Jest;
   /**
    * Exhausts tasks queued by `setImmediate()`.
@@ -394,6 +402,12 @@ export interface Jest {
    * real module).
    */
   unmock(moduleName: string): Jest;
+  /**
+   * Indicates that the module system should never return a mocked version of
+   * the specified module when it is being imported (e.g. that it should always
+   * return the real module).
+   */
+  unstable_unmockModule(moduleName: string): Jest;
   /**
    * Instructs Jest to use fake versions of the global date, performance,
    * time and timer APIs. Fake timers implementation is backed by

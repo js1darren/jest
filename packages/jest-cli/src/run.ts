@@ -7,7 +7,7 @@
 
 import * as path from 'path';
 import chalk = require('chalk');
-import exit = require('exit');
+import exit = require('exit-x');
 import yargs = require('yargs');
 import {getVersion, runCLI} from '@jest/core';
 import type {AggregatedResult} from '@jest/test-result';
@@ -79,7 +79,7 @@ export async function buildArgv(
 }
 
 const getProjectListFromCLIArgs = (argv: Config.Argv, project?: string) => {
-  const projects = argv.projects ? argv.projects : [];
+  const projects = argv.projects ?? [];
 
   if (project) {
     projects.push(project);

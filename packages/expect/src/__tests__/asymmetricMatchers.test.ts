@@ -6,6 +6,7 @@
  *
  */
 
+import {runInNewContext} from 'node:vm';
 import jestExpect from '../';
 import {
   any,
@@ -43,16 +44,16 @@ test('Any.asymmetricMatch()', () => {
 
 test('Any.asymmetricMatch() on primitive wrapper classes', () => {
   for (const test of [
-    // eslint-disable-next-line no-new-wrappers
+    /* eslint-disable no-new-wrappers, unicorn/new-for-builtins */
     any(String).asymmetricMatch(new String('jest')),
-    // eslint-disable-next-line no-new-wrappers
     any(Number).asymmetricMatch(new Number(1)),
     // eslint-disable-next-line no-new-func
     any(Function).asymmetricMatch(new Function('() => {}')),
-    // eslint-disable-next-line no-new-wrappers
     any(Boolean).asymmetricMatch(new Boolean(true)),
     any(BigInt).asymmetricMatch(Object(1n)),
     any(Symbol).asymmetricMatch(Object(Symbol())),
+    any(Array).asymmetricMatch(runInNewContext('[];')),
+    /* eslint-enable */
   ]) {
     jestExpect(test).toBe(true);
   }
@@ -416,8 +417,8 @@ describe('closeTo', () => {
     [1.23, 1.226],
     [1.23, 1.225],
     [1.23, 1.234],
-    [Infinity, Infinity],
-    [-Infinity, -Infinity],
+    [Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY],
+    [Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY],
   ]) {
     test(`${expected} closeTo ${received} return true`, () => {
       jestExpect(closeTo(expected).asymmetricMatch(received)).toBe(true);
@@ -431,9 +432,9 @@ describe('closeTo', () => {
     [0, 0.01],
     [1, 1.23],
     [1.23, 1.224_999_9],
-    [Infinity, -Infinity],
-    [Infinity, 1.23],
-    [-Infinity, -1.23],
+    [Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY],
+    [Number.POSITIVE_INFINITY, 1.23],
+    [Number.NEGATIVE_INFINITY, -1.23],
   ]) {
     test(`${expected} closeTo ${received} return false`, () => {
       jestExpect(closeTo(expected).asymmetricMatch(received)).toBe(false);

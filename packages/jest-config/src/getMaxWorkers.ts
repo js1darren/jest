@@ -15,7 +15,7 @@ import type {Config} from '@jest/types';
 function getNumCpus(): number {
   return typeof availableParallelism === 'function'
     ? availableParallelism()
-    : cpus()?.length ?? 1;
+    : (cpus()?.length ?? 1);
 }
 
 export default function getMaxWorkers(
@@ -42,7 +42,7 @@ export default function getMaxWorkers(
 }
 
 const parseWorkers = (maxWorkers: string | number): number => {
-  const parsed = parseInt(maxWorkers.toString(), 10);
+  const parsed = Number.parseInt(maxWorkers.toString(), 10);
 
   if (
     typeof maxWorkers === 'string' &&

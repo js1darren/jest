@@ -248,9 +248,10 @@ Use `describe.each` if you keep duplicating the same test suites with different 
     - `%j` - JSON.
     - `%o` - Object.
     - `%#` - Index of the test case.
+    - `%$` - Number of the test case.
     - `%%` - single percent sign ('%'). This does not consume an argument.
   - Or generate unique test titles by injecting properties of test case object with `$variable`
-    - To inject nested object values use you can supply a keyPath i.e. `$variable.path.to.value`
+    - To inject nested object values use you can supply a keyPath i.e. `$variable.path.to.value` (only works for ["own" properties](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/hasOwnProperty), e.g. `$variable.constructor.name` wouldn't work)
     - You can use `$#` to inject the index of the test case
     - You cannot use `$variable` with the `printf` formatting except for `%%`
 - `fn`: `Function` the suite of tests to be run, this is the function that will receive the parameters in each row as function arguments.
@@ -304,7 +305,7 @@ describe.each([
   - First row of variable name column headings separated with `|`
   - One or more subsequent rows of data supplied as template literal expressions using `${value}` syntax.
 - `name`: `String` the title of the test suite, use `$variable` to inject test data into the suite title from the tagged template expressions, and `$#` for the index of the row.
-  - To inject nested object values use you can supply a keyPath i.e. `$variable.path.to.value`
+  - To inject nested object values use you can supply a keyPath i.e. `$variable.path.to.value` (only works for ["own" properties](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/hasOwnProperty), e.g. `$variable.constructor.name` wouldn't work)
 - `fn`: `Function` the suite of tests to be run, this is the function that will receive the test data object.
 - Optionally, you can provide a `timeout` (in milliseconds) for specifying how long to wait for each row before aborting. The default timeout is 5 seconds.
 
@@ -550,6 +551,7 @@ Use `test.concurrent.each` if you keep duplicating the same test with different 
     - `%j` - JSON.
     - `%o` - Object.
     - `%#` - Index of the test case.
+    - `%$` - Number of the test case.
     - `%%` - single percent sign ('%'). This does not consume an argument.
 - `fn`: `Function` the test to be run, this is the function that will receive the parameters in each row as function arguments, **this will have to be an asynchronous function**.
 - Optionally, you can provide a `timeout` (in milliseconds) for specifying how long to wait for each row before aborting. The default timeout is 5 seconds.
@@ -572,7 +574,7 @@ test.concurrent.each([
   - First row of variable name column headings separated with `|`
   - One or more subsequent rows of data supplied as template literal expressions using `${value}` syntax.
 - `name`: `String` the title of the test, use `$variable` to inject test data into the test title from the tagged template expressions.
-  - To inject nested object values use you can supply a keyPath i.e. `$variable.path.to.value`
+  - To inject nested object values use you can supply a keyPath i.e. `$variable.path.to.value` (only works for ["own" properties](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/hasOwnProperty), e.g. `$variable.constructor.name` wouldn't work)
 - `fn`: `Function` the test to be run, this is the function that will receive the test data object, **this will have to be an asynchronous function**.
 - Optionally, you can provide a `timeout` (in milliseconds) for specifying how long to wait for each row before aborting. The default timeout is 5 seconds.
 
@@ -692,9 +694,10 @@ Use `test.each` if you keep duplicating the same test with different data. `test
     - `%j` - JSON.
     - `%o` - Object.
     - `%#` - Index of the test case.
+    - `%$` - Number of the test case.
     - `%%` - single percent sign ('%'). This does not consume an argument.
   - Or generate unique test titles by injecting properties of test case object with `$variable`
-    - To inject nested object values use you can supply a keyPath i.e. `$variable.path.to.value`
+    - To inject nested object values use you can supply a keyPath i.e. `$variable.path.to.value` (only works for ["own" properties](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/hasOwnProperty), e.g. `$variable.constructor.name` wouldn't work)
     - You can use `$#` to inject the index of the test case
     - You cannot use `$variable` with the `printf` formatting except for `%%`
 - `fn`: `Function` the test to be run, this is the function that will receive the parameters in each row as function arguments.
@@ -728,7 +731,7 @@ test.each([
   - First row of variable name column headings separated with `|`
   - One or more subsequent rows of data supplied as template literal expressions using `${value}` syntax.
 - `name`: `String` the title of the test, use `$variable` to inject test data into the test title from the tagged template expressions.
-  - To inject nested object values use you can supply a keyPath i.e. `$variable.path.to.value`
+  - To inject nested object values use you can supply a keyPath i.e. `$variable.path.to.value` (only works for ["own" properties](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/hasOwnProperty), e.g. `$variable.constructor.name` wouldn't work)
 - `fn`: `Function` the test to be run, this is the function that will receive the test data object.
 - Optionally, you can provide a `timeout` (in milliseconds) for specifying how long to wait for each row before aborting. The default timeout is 5 seconds.
 
@@ -1050,7 +1053,7 @@ test.each(table)('table as a variable example', (a, b, expected, extra) => {
 
 #### Template literal
 
-If all values are of the same type, the template literal API will type the arguments correctly:
+If all input values are of the same type, the template literal API will type the arguments correctly:
 
 ```ts
 import {test} from '@jest/globals';
@@ -1060,12 +1063,27 @@ test.each`
   ${1} | ${2} | ${3}
   ${3} | ${4} | ${7}
   ${5} | ${6} | ${11}
-`('template literal example', ({a, b, expected}) => {
-  // all arguments are of type `number`
+`('template literal example same type', ({a, b, expected}) => {
+  // all arguments are of type `number` because all inputs (a, b, expected) are of type `number`
 });
 ```
 
-Otherwise it will require a generic type argument:
+If the inputs have different types, the arguments will be typed as a union of all the input types (i.e. type of the variables inside the template literal):
+
+```ts
+import {test} from '@jest/globals';
+
+test.each`
+  a    | b    | expected
+  ${1} | ${2} | ${'three'}
+  ${3} | ${4} | ${'seven'}
+  ${5} | ${6} | ${'eleven'}
+`('template literal example different types', ({a, b, expected}) => {
+  // all arguments are of type `number | string` because some inputs (a, b) are of type `number` and some others (expected) are of type `string`
+});
+```
+
+Otherwise, if you want each argument to have the right type, you have to explicitly provide the generic type argument:
 
 ```ts
 import {test} from '@jest/globals';
@@ -1076,6 +1094,26 @@ test.each<{a: number; b: number; expected: string; extra?: boolean}>`
   ${3} | ${4} | ${'seven'}  | ${false}
   ${5} | ${6} | ${'eleven'}
 `('template literal example', ({a, b, expected, extra}) => {
-  // without the generic argument in this case types would default to `unknown`
+  // all arguments are typed as expected, e.g. `a: number`, `expected: string`, `extra: boolean | undefined`
 });
 ```
+
+:::caution
+
+Keep in mind the variables inside the template literal are not type checked, so you have to ensure that their types are correct.
+
+```ts
+import {test} from '@jest/globals';
+
+test.each<{a: number; expected: string}>`
+  a                            | expected
+  ${1}                         | ${'one'}
+  ${'will not raise TS error'} | ${'two'}
+  ${3}                         | ${'three'}
+`('template literal with wrongly typed input', ({a, expected}) => {
+  // all arguments are typed as stated in the generic: `a: number`, `expected: string`
+  // WARNING: `a` is of type `number` but will be a string in the 2nd test case.
+});
+```
+
+:::

@@ -23,11 +23,17 @@ type Callsite = {
 export type AssertionResult = {
   ancestorTitles: Array<string>;
   duration?: number | null;
+  startAt?: number | null;
   /**
    * Whether [`test.failing()`](https://jestjs.io/docs/api#testfailingname-fn-timeout)
    * was used.
    */
   failing?: boolean;
+  /**
+   * The raw values of the `function` or `symbol` types will be lost in some cases
+   * because it's not possible to serialize them correctly between workers.
+   * However, information about them will be available in the `failureMessages`.
+   */
   failureDetails: Array<unknown>;
   failureMessages: Array<string>;
   fullName: string;

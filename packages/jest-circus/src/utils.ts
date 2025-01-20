@@ -11,7 +11,7 @@ import dedent from 'dedent';
 import isGeneratorFn from 'is-generator-fn';
 import slash = require('slash');
 import StackUtils = require('stack-utils');
-import type {AssertionResult, Status} from '@jest/test-result';
+import type {Status, TestCaseResult} from '@jest/test-result';
 import type {Circus, Global} from '@jest/types';
 import {
   ErrorWithStack,
@@ -161,7 +161,7 @@ export const getEachHooksForTest = (test: Circus.TestEntry): TestHooks => {
     }
     // 'beforeEach' hooks are executed from top to bottom, the opposite of the
     // way we traversed it.
-    result.beforeEach = [...beforeEachForCurrentBlock, ...result.beforeEach];
+    result.beforeEach.unshift(...beforeEachForCurrentBlock);
   } while ((block = block.parent));
   return result;
 };
@@ -301,20 +301,13 @@ export const callAsyncCircusFn = (
     // Otherwise this test is synchronous, and if it didn't throw it means
     // it passed.
     resolve();
-  })
-    .then(() => {
-      completed = true;
-      // If timeout is not cleared/unrefed the node process won't exit until
-      // it's resolved.
-      timeoutID.unref?.();
-      clearTimeout(timeoutID);
-    })
-    .catch(error => {
-      completed = true;
-      timeoutID.unref?.();
-      clearTimeout(timeoutID);
-      throw error;
-    });
+  }).finally(() => {
+    completed = true;
+    // If timeout is not cleared/unrefed the node process won't exit until
+    // it's resolved.
+    timeoutID.unref?.();
+    clearTimeout(timeoutID);
+  });
 };
 
 export const getTestDuration = (test: Circus.TestEntry): number | null => {
@@ -382,25 +375,30 @@ export const makeSingleTestResult = (
     location,
     numPassingAsserts: test.numPassingAsserts,
     retryReasons: test.retryReasons.map(_getError).map(getErrorStack),
+    startedAt: test.startedAt,
     status,
-    testPath: Array.from(testPath),
+    testPath: [...testPath],
   };
 };
 
 const makeTestResults = (
   describeBlock: Circus.DescribeBlock,
 ): Circus.TestResults => {
-  const testResults: Circus.TestResults = [];
+  const testResults = [];
+  const stack: [[Circus.DescribeBlock, number]] = [[describeBlock, 0]];
 
-  for (const child of describeBlock.children) {
-    switch (child.type) {
-      case 'describeBlock': {
-        testResults.push(...makeTestResults(child));
+  while (stack.length > 0) {
+    const [currentBlock, childIndex] = stack.pop()!;
+
+    for (let i = childIndex; i < currentBlock.children.length; i++) {
+      const child = currentBlock.children[i];
+
+      if (child.type === 'describeBlock') {
+        stack.push([currentBlock, i + 1], [child, 0]);
         break;
       }
-      case 'test': {
+      if (child.type === 'test') {
         testResults.push(makeSingleTestResult(child));
-        break;
       }
     }
   }
@@ -427,6 +425,7 @@ const _getError = (
     asyncError = errors[1];
   } else {
     error = errors;
+    // eslint-disable-next-line unicorn/error-message
     asyncError = new Error();
   }
 
@@ -472,7 +471,7 @@ const resolveTestCaseStartInfo = (
     name => name !== ROOT_DESCRIBE_BLOCK_NAME,
   );
   const fullName = ancestorTitles.join(' ');
-  const title = testNamesPath[testNamesPath.length - 1];
+  const title = testNamesPath.at(-1)!;
   // remove title
   ancestorTitles.pop();
   return {
@@ -484,7 +483,7 @@ const resolveTestCaseStartInfo = (
 
 export const parseSingleTestResult = (
   testResult: Circus.TestResult,
-): AssertionResult => {
+): TestCaseResult => {
   let status: Status;
   if (testResult.status === 'skip') {
     status = 'pending';
@@ -505,12 +504,13 @@ export const parseSingleTestResult = (
     duration: testResult.duration,
     failing: testResult.failing,
     failureDetails: testResult.errorsDetailed,
-    failureMessages: Array.from(testResult.errors),
+    failureMessages: [...testResult.errors],
     fullName,
     invocations: testResult.invocations,
     location: testResult.location,
     numPassingAsserts: testResult.numPassingAsserts,
-    retryReasons: Array.from(testResult.retryReasons),
+    retryReasons: [...testResult.retryReasons],
+    startedAt: testResult.startedAt,
     status,
     title,
   };

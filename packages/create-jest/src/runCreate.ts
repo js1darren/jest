@@ -7,7 +7,7 @@
 
 import * as path from 'path';
 import chalk = require('chalk');
-import exit = require('exit');
+import exit = require('exit-x');
 import * as fs from 'graceful-fs';
 import prompts = require('prompts');
 import {constants} from 'jest-config';
@@ -56,13 +56,13 @@ export async function runCreate(rootDir = process.cwd()): Promise<void> {
     throw new NotFoundPackageJsonError(rootDir);
   }
 
-  const questions = defaultQuestions.slice(0);
+  const questions = [...defaultQuestions];
   let hasJestProperty = false;
   let projectPackageJson: ProjectPackageJson;
 
   try {
     projectPackageJson = JSON.parse(
-      fs.readFileSync(projectPackageJsonPath, 'utf-8'),
+      fs.readFileSync(projectPackageJsonPath, 'utf8'),
     ) as ProjectPackageJson;
   } catch {
     throw new MalformedPackageJsonError(projectPackageJsonPath);
@@ -126,8 +126,8 @@ export async function runCreate(rootDir = process.cwd()): Promise<void> {
   const jestConfigFileExt = results.useTypescript
     ? JEST_CONFIG_EXT_TS
     : projectPackageJson.type === 'module'
-    ? JEST_CONFIG_EXT_MJS
-    : JEST_CONFIG_EXT_JS;
+      ? JEST_CONFIG_EXT_MJS
+      : JEST_CONFIG_EXT_JS;
 
   // Determine Jest config path
   const jestConfigPath =
