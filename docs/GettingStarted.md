@@ -119,13 +119,21 @@ module.exports = {
 
 </details>
 
+## Using with bundlers
+
+Most of the time you do not need to do anything special to work with different bundlers - the exception is if you have some plugin or configuration which generates files or have custom file resolution rules.
+
 ### Using webpack
 
 Jest can be used in projects that use [webpack](https://webpack.js.org/) to manage assets, styles, and compilation. webpack does offer some unique challenges over other tools. Refer to the [webpack guide](Webpack.md) to get started.
 
 ### Using Vite
 
-Jest can be used in projects that use [vite](https://vitejs.dev/) to serve source code over native ESM to provide some frontend tooling, vite is an opinionated tool and does offer some out-of-the box workflows. Jest is not fully supported by vite due to how the [plugin system](https://github.com/vitejs/vite/issues/1955#issuecomment-776009094) from vite works, but there are some working examples for first-class jest integration using `vite-jest`, since this is not fully supported, you might as well read the [limitation of the `vite-jest`](https://github.com/sodatea/vite-jest/tree/main/packages/vite-jest#limitations-and-differences-with-commonjs-tests). Refer to the [vite guide](https://vitejs.dev/guide/) to get started.
+Jest is not supported by Vite due to incompatibilities with the Vite [plugin system](https://github.com/vitejs/vite/issues/1955#issuecomment-776009094).
+
+There are examples for Jest integration with Vite in the [vite-jest](https://github.com/sodatea/vite-jest) library. However, this library is not compatible with versions of Vite later than 2.4.2.
+
+One alternative is [Vitest](https://vitest.dev/) which has an API compatible Jest.
 
 ### Using Parcel
 
@@ -205,3 +213,38 @@ npm install --save-dev @types/jest
 `@types/jest` is a third party library maintained at [DefinitelyTyped](https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/jest), hence the latest Jest features or versions may not be covered yet. Try to match versions of Jest and `@types/jest` as closely as possible. For example, if you are using Jest `27.4.0` then installing `27.4.x` of `@types/jest` is ideal.
 
 :::
+
+### Using ESLint
+
+Jest can be used with ESLint without any further configuration as long as you import the [Jest global helpers](GlobalAPI.md) (`describe`, `it`, etc.) from `@jest/globals` before using them in your test file. This is necessary to avoid `no-undef` errors from ESLint, which doesn't know about the Jest globals.
+
+If you'd like to avoid these imports, you can configure your [ESLint environment](https://eslint.org/docs/latest/use/configure/language-options#specifying-environments) to support these globals by adding the `jest` environment:
+
+```json
+{
+  "overrides": [
+    {
+      "files": ["tests/**/*"],
+      "env": {
+        "jest": true
+      }
+    }
+  ]
+}
+```
+
+Or use [`eslint-plugin-jest`](https://github.com/jest-community/eslint-plugin-jest), which has a similar effect:
+
+```json
+{
+  "overrides": [
+    {
+      "files": ["tests/**/*"],
+      "plugins": ["jest"],
+      "env": {
+        "jest/globals": true
+      }
+    }
+  ]
+}
+```

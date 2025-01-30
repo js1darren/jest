@@ -17,7 +17,6 @@ Jest is a universal testing platform, with the ability to adapt to any JavaScrip
 ## AngularJS
 
 - [Testing an AngularJS app with Jest](https://medium.com/aya-experience/testing-an-angularjs-app-with-jest-3029a613251) by Matthieu Lux ([@Swiip](https://twitter.com/Swiip))
-- [Running AngularJS Tests with Jest](https://engineering.talentpair.com/running-angularjs-tests-with-jest-49d0cc9c6d26) by Ben Brandt ([@benjaminbrandt](https://twitter.com/benjaminbrandt))
 - [AngularJS Unit Tests with Jest Actions (Traditional Chinese)](https://dwatow.github.io/2019/08-14-angularjs/angular-jest/?fbclid=IwAR2SrqYg_o6uvCQ79FdNPeOxs86dUqB6pPKgd9BgnHt1kuIDRyRM-ch11xg) by Chris Wang ([@dwatow](https://github.com/dwatow))
 
 ## Angular
@@ -34,7 +33,7 @@ Jest is a universal testing platform, with the ability to adapt to any JavaScrip
 
 ## Express.js
 
-- [How to test Express.js with Jest and Supertest](http://www.albertgao.xyz/2017/05/24/how-to-test-expressjs-with-jest-and-supertest/) by Albert Gao ([@albertgao](https://twitter.com/albertgao))
+- [How to test Express.js with Jest and Supertest](https://www.albertgao.com/2017/05/24/how-to-test-expressjs-with-jest-and-supertest/) by Albert Gao [@albertgao](https://x.com/albertgao)
 
 ## GatsbyJS
 
@@ -46,4 +45,8 @@ Jest is a universal testing platform, with the ability to adapt to any JavaScrip
 
 ## Next.js
 
-- [Jest and React Testing Library](https://nextjs.org/docs/testing#jest-and-react-testing-library) by Next.js docs
+- [Jest and React Testing Library](https://nextjs.org/docs/pages/building-your-application/testing/jest) by Next.js docs
+
+## NestJS
+
+- [Jest and NestJS dependencies](https://docs.nestjs.com/fundamentals/testing#unit-testing) by NestJS docs

@@ -22,6 +22,8 @@ import {
   PARENT_MESSAGE_SETUP_ERROR,
   type ParentMessageMemUsage,
 } from '../types';
+import {isDataCloneError} from './isDataCloneError';
+import {packMessage} from './safeMessageTransferring';
 
 type UnknownFunction = (...args: Array<unknown>) => unknown | Promise<unknown>;
 
@@ -114,11 +116,21 @@ function reportSuccess(result: unknown) {
 
   try {
     parentPort!.postMessage([PARENT_MESSAGE_OK, result]);
-  } catch (err: any) {
-    // Handling it here to avoid unhandled `DataCloneError` rejection
+  } catch (error) {
+    let resolvedError = error;
+    // Try to handle https://html.spec.whatwg.org/multipage/structured-data.html#structuredserializeinternal
+    // for `symbols` and `functions`
+    if (isDataCloneError(error)) {
+      try {
+        parentPort!.postMessage([PARENT_MESSAGE_OK, packMessage(result)]);
+        return;
+      } catch (secondTryError) {
+        resolvedError = secondTryError;
+      }
+    }
+    // Handling it here to avoid unhandled rejection
     // which is hard to distinguish on the parent side
-    // (such error doesn't have any message or stack trace)
-    reportClientError(err);
+    reportClientError(resolvedError as Error);
   }
 }
 
@@ -202,8 +214,8 @@ function execFunction(
 
   try {
     result = fn.apply(ctx, args);
-  } catch (err: any) {
-    onError(err);
+  } catch (error: any) {
+    onError(error);
 
     return;
   }

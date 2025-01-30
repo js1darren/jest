@@ -10,19 +10,17 @@ import type {PluginObj} from '@babel/core';
 import {statement} from '@babel/template';
 import type {NodePath} from '@babel/traverse';
 import {
-  type BlockStatement,
   type CallExpression,
   type Expression,
   type Identifier,
   type ImportDeclaration,
   type MemberExpression,
   type Node,
-  type Program,
+  type Statement,
   type Super,
   type VariableDeclaration,
   type VariableDeclarator,
   callExpression,
-  emptyStatement,
   isIdentifier,
   variableDeclaration,
 } from '@babel/types';
@@ -133,7 +131,7 @@ FUNCTIONS.mock = args => {
       );
     }
 
-    const ids: Set<NodePath<Identifier>> = new Set();
+    const ids = new Set<NodePath<Identifier>>();
     const parentScope = moduleFactory.parentPath.scope;
     // @ts-expect-error: ReferencedIdentifier and denylist are not known on visitors
     moduleFactory.traverse(IDVisitor, {ids});
@@ -190,9 +188,7 @@ FUNCTIONS.mock = args => {
             'The module factory of `jest.mock()` is not allowed to ' +
               'reference any out-of-scope variables.\n' +
               `Invalid variable access: ${name}\n` +
-              `Allowed objects: ${Array.from(ALLOWED_IDENTIFIERS).join(
-                ', ',
-              )}.\n` +
+              `Allowed objects: ${[...ALLOWED_IDENTIFIERS].join(', ')}.\n` +
               'Note: This is a precaution to guard against uninitialized mock ' +
               'variables. If it is ensured that the mock is required lazily, ' +
               'variable names prefixed with `mock` (case insensitive) are permitted.\n',
@@ -358,42 +354,30 @@ export default function jestHoist(): PluginObj<{
     },
     // in `post` to make sure we come after an import transform and can unshift above the `require`s
     post({path: program}) {
-      visitBlock(program);
-      program.traverse({BlockStatement: visitBlock});
+      type Item = {calls: Array<Statement>; vars: Array<Statement>};
 
-      function visitBlock(block: NodePath<BlockStatement> | NodePath<Program>) {
-        // use a temporary empty statement instead of the real first statement, which may itself be hoisted
-        const [varsHoistPoint, callsHoistPoint] = block.unshiftContainer(
-          'body',
-          [emptyStatement(), emptyStatement()],
-        );
-        block.traverse({
-          CallExpression: visitCallExpr,
-          VariableDeclarator: visitVariableDeclarator,
-          // do not traverse into nested blocks, or we'll hoist calls in there out to this block
-          denylist: ['BlockStatement'],
-        });
-        callsHoistPoint.remove();
-        varsHoistPoint.remove();
-
-        function visitCallExpr(callExpr: NodePath<CallExpression>) {
+      const stack: Array<Item> = [{calls: [], vars: []}];
+      program.traverse({
+        BlockStatement: {
+          enter() {
+            stack.push({calls: [], vars: []});
+          },
+          exit(path) {
+            const item = stack.pop()!;
+            path.node.body.unshift(...item.vars, ...item.calls);
+          },
+        },
+        CallExpression(callExpr: NodePath<CallExpression>) {
           if (hoistedJestGetters.has(callExpr.node)) {
             const mockStmt = callExpr.getStatementParent();
 
-            if (mockStmt) {
-              const mockStmtParent = mockStmt.parentPath;
-              if (mockStmtParent.isBlock()) {
-                const mockStmtNode = mockStmt.node;
-                mockStmt.remove();
-                callsHoistPoint.insertBefore(mockStmtNode);
-              }
+            if (mockStmt && mockStmt.parentPath.isBlock()) {
+              stack.at(-1)!.calls.push(mockStmt.node);
+              mockStmt.remove();
             }
           }
-        }
-
-        function visitVariableDeclarator(
-          varDecl: NodePath<VariableDeclarator>,
-        ) {
+        },
+        VariableDeclarator(varDecl: NodePath<VariableDeclarator>) {
           if (hoistedVariables.has(varDecl.node)) {
             // should be assert function, but it's not. So let's cast below
             varDecl.parentPath.assertVariableDeclaration();
@@ -404,12 +388,12 @@ export default function jestHoist(): PluginObj<{
             } else {
               varDecl.remove();
             }
-            varsHoistPoint.insertBefore(
-              variableDeclaration(kind, [varDecl.node]),
-            );
+            stack.at(-1)!.vars.push(variableDeclaration(kind, [varDecl.node]));
           }
-        }
-      }
+        },
+      });
+      const item = stack.pop()!;
+      program.node.body.unshift(...item.vars, ...item.calls);
     },
   };
 }

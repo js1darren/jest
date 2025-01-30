@@ -16,7 +16,7 @@ Also note that the APIs Jest uses to implement ESM support are still [considered
 With the warnings out of the way, this is how you activate ESM support in your tests.
 
 1. Ensure you either disable [code transforms](Configuration.md#transform-objectstring-pathtotransformer--pathtotransformer-object) by passing `transform: {}` or otherwise configure your transformer to emit ESM rather than the default CommonJS (CJS).
-1. Execute `node` with `--experimental-vm-modules`, e.g. `node --experimental-vm-modules node_modules/jest/bin/jest.js` or `NODE_OPTIONS=--experimental-vm-modules npx jest` etc.
+1. Execute `node` with `--experimental-vm-modules`, e.g. `node --experimental-vm-modules node_modules/jest/bin/jest.js` or `NODE_OPTIONS="$NODE_OPTIONS --experimental-vm-modules" npx jest` etc.
 
    On Windows, you can use [`cross-env`](https://github.com/kentcdodds/cross-env) to be able to set environment variables.
 
@@ -64,6 +64,54 @@ const {execSync} = await import('node:child_process');
 
 // etc.
 ```
+
+## Module unmocking in ESM
+
+```js title="esm-module.mjs"
+export default () => {
+  return 'default';
+};
+
+export const namedFn = () => {
+  return 'namedFn';
+};
+```
+
+```js title="esm-module.test.mjs"
+import {jest, test} from '@jest/globals';
+
+test('test esm-module', async () => {
+  jest.unstable_mockModule('./esm-module.js', () => ({
+    default: () => 'default implementation',
+    namedFn: () => 'namedFn implementation',
+  }));
+
+  const mockModule = await import('./esm-module.js');
+
+  console.log(mockModule.default()); // 'default implementation'
+  console.log(mockModule.namedFn()); // 'namedFn implementation'
+
+  jest.unstable_unmockModule('./esm-module.js');
+
+  const originalModule = await import('./esm-module.js');
+
+  console.log(originalModule.default()); // 'default'
+  console.log(originalModule.namedFn()); // 'namedFn'
+
+  /* !!! WARNING !!! Don`t override */
+  jest.unstable_mockModule('./esm-module.js', () => ({
+    default: () => 'default override implementation',
+    namedFn: () => 'namedFn override implementation',
+  }));
+
+  const mockModuleOverride = await import('./esm-module.js');
+
+  console.log(mockModuleOverride.default()); // 'default implementation'
+  console.log(mockModuleOverride.namedFn()); // 'namedFn implementation'
+});
+```
+
+## Mocking CJS modules
 
 For mocking CJS modules, you should continue to use `jest.mock`. See the example below:
 

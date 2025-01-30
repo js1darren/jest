@@ -146,9 +146,9 @@ Although the `.toBe` matcher **checks** referential identity, it **reports** a d
 
 Also under the alias: `.toBeCalled()`
 
-Use `.toHaveBeenCalledWith` to ensure that a mock function was called with specific arguments. The arguments are checked with the same algorithm that `.toEqual` uses.
+Use `.toHaveBeenCalled` to ensure that a mock function was called.
 
-For example, let's say you have a `drinkAll(drink, flavour)` function that takes a `drink` function and applies it to all available beverages. You might want to check that `drink` gets called for `'lemon'`, but not for `'octopus'`, because `'octopus'` flavour is really weird and why would anything be octopus-flavoured? You can do that with this test suite:
+For example, let's say you have a `drinkAll(drink, flavour)` function that takes a `drink` function and applies it to all available beverages. You might want to check that `drink` gets called. You can do that with this test suite:
 
 ```js
 function drinkAll(callback, flavour) {
@@ -811,7 +811,7 @@ For example, let's say that `drinkFlavor` is coded like this:
 
 ```js
 function drinkFlavor(flavor) {
-  if (flavor == 'octopus') {
+  if (flavor === 'octopus') {
     throw new DisgustingFlavorError('yuck, octopus flavor');
   }
   // Do some other stuff
@@ -849,7 +849,7 @@ For example, let's say you have a `drinkFlavor` function that throws whenever th
 
 ```js
 function drinkFlavor(flavor) {
-  if (flavor == 'octopus') {
+  if (flavor === 'octopus') {
     throw new DisgustingFlavorError('yuck, octopus flavor');
   }
   // Do some other stuff
@@ -1364,7 +1364,7 @@ function toBeWithinRange(actual, floor, ceiling) {
     typeof floor !== 'number' ||
     typeof ceiling !== 'number'
   ) {
-    throw new Error('These must be of type number!');
+    throw new TypeError('These must be of type number!');
   }
 
   const pass = actual >= floor && actual <= ceiling;
@@ -1439,7 +1439,7 @@ const toBeWithinRange: MatcherFunction<[floor: unknown, ceiling: unknown]> =
       typeof floor !== 'number' ||
       typeof ceiling !== 'number'
     ) {
-      throw new Error('These must be of type number!');
+      throw new TypeError('These must be of type number!');
     }
 
     const pass = actual >= floor && actual <= ceiling;
@@ -1527,7 +1527,7 @@ expect.extend({
 expect.extend({
   async toBeDivisibleByExternalValue(received) {
     const externalValue = await getExternalValueFromRemoteSource();
-    const pass = received % externalValue == 0;
+    const pass = received % externalValue === 0;
     if (pass) {
       return {
         message: () =>
@@ -1664,7 +1664,7 @@ expect.extend({
   toMatchTrimmedSnapshot(received, length) {
     return toMatchSnapshot.call(
       this,
-      received.substring(0, length),
+      received.slice(0, length),
       'toMatchTrimmedSnapshot',
     );
   },
@@ -1688,7 +1688,7 @@ const {toMatchInlineSnapshot} = require('jest-snapshot');
 
 expect.extend({
   toMatchTrimmedInlineSnapshot(received, ...rest) {
-    return toMatchInlineSnapshot.call(this, received.substring(0, 10), ...rest);
+    return toMatchInlineSnapshot.call(this, received.slice(0, 10), ...rest);
   },
 });
 

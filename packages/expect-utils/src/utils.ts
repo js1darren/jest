@@ -183,6 +183,8 @@ export const iterableEquality = (
     typeof b !== 'object' ||
     Array.isArray(a) ||
     Array.isArray(b) ||
+    ArrayBuffer.isView(a) ||
+    ArrayBuffer.isView(b) ||
     !hasIterator(a) ||
     !hasIterator(b)
   ) {
@@ -307,8 +309,8 @@ export const iterableEquality = (
     !isImmutableOrderedSet(a) &&
     !isImmutableRecord(a)
   ) {
-    const aEntries = Object.entries(a);
-    const bEntries = Object.entries(b);
+    const aEntries = entries(a);
+    const bEntries = entries(b);
     if (!equals(aEntries, bEntries)) {
       return false;
     }
@@ -320,13 +322,25 @@ export const iterableEquality = (
   return true;
 };
 
+const entries = (obj: any) => {
+  if (!isObject(obj)) return [];
+
+  const symbolProperties = Object.getOwnPropertySymbols(obj)
+    .filter(key => key !== Symbol.iterator)
+    .map(key => [key, obj[key]]);
+
+  return [...symbolProperties, ...Object.entries(obj)];
+};
+
 const isObject = (a: any) => a !== null && typeof a === 'object';
 
 const isObjectWithKeys = (a: any) =>
   isObject(a) &&
   !(a instanceof Error) &&
-  !(a instanceof Array) &&
-  !(a instanceof Date);
+  !Array.isArray(a) &&
+  !(a instanceof Date) &&
+  !(a instanceof Set) &&
+  !(a instanceof Map);
 
 export const subsetEquality = (
   object: unknown,
@@ -345,12 +359,14 @@ export const subsetEquality = (
         return undefined;
       }
 
-      return getObjectKeys(subset).every(key => {
+      if (seenReferences.has(subset)) return undefined;
+      seenReferences.set(subset, true);
+
+      const matchResult = getObjectKeys(subset).every(key => {
         if (isObjectWithKeys(subset[key])) {
           if (seenReferences.has(subset[key])) {
             return equals(object[key], subset[key], filteredCustomTesters);
           }
-          seenReferences.set(subset[key], true);
         }
         const result =
           object != null &&
@@ -367,6 +383,8 @@ export const subsetEquality = (
         seenReferences.delete(subset[key]);
         return result;
       });
+      seenReferences.delete(subset);
+      return matchResult;
     };
 
   return subsetEqualityWithContext()(object, subset);
@@ -397,9 +415,12 @@ export const arrayBufferEquality = (
   let dataViewA = a;
   let dataViewB = b;
 
-  if (a instanceof ArrayBuffer && b instanceof ArrayBuffer) {
+  if (isArrayBuffer(a) && isArrayBuffer(b)) {
     dataViewA = new DataView(a);
     dataViewB = new DataView(b);
+  } else if (ArrayBuffer.isView(a) && ArrayBuffer.isView(b)) {
+    dataViewA = new DataView(a.buffer, a.byteOffset, a.byteLength);
+    dataViewB = new DataView(b.buffer, b.byteOffset, b.byteLength);
   }
 
   if (!(dataViewA instanceof DataView && dataViewB instanceof DataView)) {
@@ -420,6 +441,10 @@ export const arrayBufferEquality = (
 
   return true;
 };
+
+function isArrayBuffer(obj: unknown): obj is ArrayBuffer {
+  return Object.prototype.toString.call(obj) === '[object ArrayBuffer]';
+}
 
 export const sparseArrayEquality = (
   a: unknown,
@@ -463,14 +488,14 @@ export const pathAsArray = (propertyPath: string): Array<any> => {
   }
 
   // will match everything that's not a dot or a bracket, and "" for consecutive dots.
-  const pattern = RegExp('[^.[\\]]+|(?=(?:\\.)(?:\\.|$))', 'g');
+  const pattern = new RegExp('[^.[\\]]+|(?=(?:\\.)(?:\\.|$))', 'g');
 
   // Because the regex won't match a dot in the beginning of the path, if present.
   if (propertyPath[0] === '.') {
     properties.push('');
   }
 
-  propertyPath.replace(pattern, match => {
+  propertyPath.replaceAll(pattern, match => {
     properties.push(match);
     return match;
   });
@@ -494,7 +519,7 @@ export function emptyObject(obj: unknown): boolean {
   return obj && typeof obj === 'object' ? Object.keys(obj).length === 0 : false;
 }
 
-const MULTILINE_REGEXP = /[\r\n]/;
+const MULTILINE_REGEXP = /[\n\r]/;
 
 export const isOneline = (expected: unknown, received: unknown): boolean =>
   typeof expected === 'string' &&

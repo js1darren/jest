@@ -528,6 +528,51 @@ getRandom(); // Always returns 10
 
 Returns a mock module instead of the actual module, bypassing all checks on whether the module should be required normally or not.
 
+### `jest.onGenerateMock(cb)`
+
+Registers a callback function that is invoked whenever Jest generates a mock for a module. This callback allows you to modify the mock before it is returned to the rest of your tests.
+
+Parameters for callback:
+
+1. `moduleName: string` - The name of the module that is being mocked.
+2. `moduleMock: T` - The mock object that Jest has generated for the module. This object can be modified or replaced before returning.
+
+Behaviour:
+
+- If multiple callbacks are registered via consecutive `onGenerateMock` calls, they will be invoked **in the order they were added**.
+- Each callback receives the output of the previous callback as its `moduleMock`. This makes it possible to apply multiple layers of transformations to the same mock.
+
+```js
+jest.onGenerateMock((moduleName, moduleMock) => {
+  // Inspect the module name and decide how to transform the mock
+  if (moduleName.includes('Database')) {
+    // For demonstration, let's replace a method with our own custom mock
+    moduleMock.connect = jest.fn().mockImplementation(() => {
+      console.log('Connected to mock DB');
+    });
+  }
+
+  // Return the (potentially modified) mock
+  return moduleMock;
+});
+
+// Apply mock for module
+jest.mock('./Database');
+
+// Later in your tests
+import Database from './Database';
+// The `Database` mock now has any transformations applied by our callback
+```
+
+:::note
+
+The `onGenerateMock` callback is not called for manually created mocks, such as:
+
+- Mocks defined in a `__mocks__` folder
+- Explicit factories provided via `jest.mock('moduleName', () => { ... })`
+
+:::
+
 ### `jest.resetModules()`
 
 Resets the module registry - the cache of all required modules. This is useful to isolate modules where local state might conflict between tests.
@@ -710,6 +755,64 @@ test('plays video', () => {
 });
 ```
 
+#### Spied methods and the `using` keyword
+
+If your codebase is set up to transpile the ["explicit resource management"](https://github.com/tc39/proposal-explicit-resource-management) (e.g. if you are using TypeScript >= 5.2 or the `@babel/plugin-proposal-explicit-resource-management` plugin), you can use `spyOn` in combination with the `using` keyword:
+
+```js
+test('logs a warning', () => {
+  using spy = jest.spyOn(console.warn);
+  doSomeThingWarnWorthy();
+  expect(spy).toHaveBeenCalled();
+});
+```
+
+That code is semantically equal to
+
+```js
+test('logs a warning', () => {
+  let spy;
+  try {
+    spy = jest.spyOn(console.warn);
+    doSomeThingWarnWorthy();
+    expect(spy).toHaveBeenCalled();
+  } finally {
+    spy.mockRestore();
+  }
+});
+```
+
+That way, your spy will automatically be restored to the original value once the current code block is left.
+
+You can even go a step further and use a code block to restrict your mock to only a part of your test without hurting readability.
+
+```js
+test('testing something', () => {
+  {
+    using spy = jest.spyOn(console.warn);
+    setupStepThatWillLogAWarning();
+  }
+  // here, console.warn is already restored to the original value
+  // your test can now continue normally
+});
+```
+
+:::note
+
+If you get a warning that `Symbol.dispose` does not exist, you might need to polyfill that, e.g. with this code:
+
+```js
+if (!Symbol.dispose) {
+  Object.defineProperty(Symbol, 'dispose', {
+    get() {
+      return Symbol.for('nodejs.dispose');
+    },
+  });
+}
+```
+
+:::
+
 ### `jest.spyOn(object, methodName, accessType?)`
 
 Since Jest 22.1.0+, the `jest.spyOn` method takes an optional third argument of `accessType` that can be either `'get'` or `'set'`, which proves to be useful when you want to spy on a getter or a setter, respectively.
@@ -753,7 +856,7 @@ afterEach(() => {
 
 test('plays video', () => {
   const spy = jest.spyOn(video, 'play', 'get'); // we pass 'get'
-  const isPlaying = video.play();
+  const isPlaying = video.play;
 
   expect(spy).toHaveBeenCalled();
   expect(isPlaying).toBe(true);
@@ -839,7 +942,7 @@ type FakeTimersConfig = {
    * The default is `false`.
    */
   legacyFakeTimers?: boolean;
-  /** Sets current system time to be used by fake timers. The default is `Date.now()`. */
+  /** Sets current system time to be used by fake timers, in milliseconds. The default is `Date.now()`. */
   now?: number | Date;
   /**
    * The maximum number of recursive timers that will be run when calling `jest.runAllTimers()`.
@@ -1065,6 +1168,26 @@ If `logErrorsBeforeRetry` option is enabled, error(s) that caused the test to fa
 
 ```js
 jest.retryTimes(3, {logErrorsBeforeRetry: true});
+
+test('will fail', () => {
+  expect(true).toBe(false);
+});
+```
+
+`waitBeforeRetry` is the number of milliseconds to wait before retrying.
+
+```js
+jest.retryTimes(3, {waitBeforeRetry: 1000});
+
+test('will fail', () => {
+  expect(true).toBe(false);
+});
+```
+
+`retryImmediately` option is used to retry the failed test immediately after the failure. If this option is not specified, the tests are retried after Jest is finished running all other tests in the file.
+
+```js
+jest.retryTimes(3, {retryImmediately: true});
 
 test('will fail', () => {
   expect(true).toBe(false);

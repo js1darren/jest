@@ -20,13 +20,32 @@ import ThreadsWorker from '../NodeThreadsWorker';
 jest.setTimeout(10_000);
 
 const root = join('../../');
-const filesToBuild = ['workers/processChild', 'workers/threadChild', 'types'];
+const filesToBuild = [
+  'workers/processChild',
+  'workers/threadChild',
+  'workers/safeMessageTransferring',
+  'workers/isDataCloneError',
+  'types',
+];
 const writeDestination = join(__dirname, '__temp__');
 const processChildWorkerPath = join(
   writeDestination,
   'workers/processChild.js',
 );
 const threadChildWorkerPath = join(writeDestination, 'workers/threadChild.js');
+
+// https://github.com/nodejs/node/issues/51766
+if (
+  process.platform === 'win32' &&
+  (process.version.startsWith('v21.') ||
+    process.version.startsWith('v22.') ||
+    process.version.startsWith('v23.'))
+) {
+  // eslint-disable-next-line jest/no-focused-tests
+  test.only('skipping test on broken platform', () => {
+    console.warn('Skipping test on broken platform');
+  });
+}
 
 beforeAll(async () => {
   await mkdir(writeDestination, {recursive: true});
@@ -39,9 +58,7 @@ beforeAll(async () => {
 
     const result = await transformFileAsync(sourcePath);
 
-    await writeFile(writePath, result!.code!, {
-      encoding: 'utf-8',
-    });
+    await writeFile(writePath, result!.code!, 'utf8');
   }
 });
 
